@@ -39,8 +39,10 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: python -m app.run_daily
-      - name: Build the website page
+      - name: Build the website page (locked with SITE_PASSWORD if you add that secret)
         working-directory: backend
+        env:
+          SITE_PASSWORD: ${{ secrets.SITE_PASSWORD }}
         run: python -m app.export_site --out ../site/index.html
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
