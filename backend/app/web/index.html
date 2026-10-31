@@ -1,0 +1,506 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>StockBot</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+:root {
+  --bg: #f1f4f7; --panel: #ffffff; --ink: #101c27; --muted: #566879; --line: #d8e0e7; --accent: #0a6c8a; --accent-soft: #dcedf3;
+  --gain: #11794f; --loss: #b93434; --warn: #8f5d00; --gain-soft: #dff2e9; --loss-soft: #f8e1e1; --warn-soft: #fbefd2;
+  --font: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0b1218; --panel: #121b23; --ink: #e4ebf0; --muted: #8b9eae; --line: #22323f; --accent: #4db9d8; --accent-soft: #15303a;
+    --gain: #3fc08d; --loss: #f07676; --warn: #e2b350; --gain-soft: #123127; --loss-soft: #3a1c1f; --warn-soft: #382c10; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0b1218; --panel: #121b23; --ink: #e4ebf0; --muted: #8b9eae; --line: #22323f; --accent: #4db9d8; --accent-soft: #15303a;
+  --gain: #3fc08d; --loss: #f07676; --warn: #e2b350; --gain-soft: #123127; --loss-soft: #3a1c1f; --warn-soft: #382c10; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { background: var(--bg); }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 14px; line-height: 1.5; padding: 0 max(16px, env(safe-area-inset-right, 0px)) 24px max(16px, env(safe-area-inset-left, 0px)); }
+.wrap { max-width: 1080px; margin: 0 auto; }
+a { color: inherit; text-decoration: none; }
+button, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.pos { color: var(--gain); } .neg { color: var(--loss); } .muted { color: var(--muted); }
+code { font-family: var(--mono); font-size: 12.5px; background: var(--line); padding: 1px 5px; border-radius: 4px; }
+
+.top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 14px 0 10px; }
+.brand { font-weight: 600; font-size: 18px; letter-spacing: -0.01em; }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px; border-radius: 99px; font-size: 12px; font-weight: 600; line-height: 1.5; white-space: nowrap; }
+.pill.buy { background: var(--gain-soft); color: var(--gain); } .pill.sell { background: var(--loss-soft); color: var(--loss); }
+.pill.open { background: var(--accent-soft); color: var(--accent); } .pill.sample { background: var(--warn-soft); color: var(--warn); }
+.statusline { color: var(--muted); font-size: 12.5px; margin-left: auto; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+#tape { min-height: 0; }
+
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); overflow-x: auto; margin-bottom: 18px; }
+.tab { background: none; border: 0; padding: 10px 14px; color: var(--muted); font-weight: 500; cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; margin-bottom: -1px; }
+.tab:hover { color: var(--ink); } .tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+h1 { font-size: 22px; font-weight: 600; margin: 0 0 2px; letter-spacing: -0.01em; text-wrap: balance; }
+h2 { font-size: 13px; font-weight: 600; margin: 26px 0 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.lead { color: var(--muted); margin: 0 0 14px; max-width: 70ch; }
+.note { background: var(--warn-soft); border-radius: 8px; padding: 9px 12px; font-size: 13px; margin: 0 0 16px; }
+.empty { padding: 22px 18px; }
+.empty h3 { margin: 0 0 6px; font-size: 16px; }
+.empty p { margin: 4px 0; color: var(--muted); max-width: 70ch; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+.tile { padding: 12px 14px; min-width: 0; }
+.tile .k { color: var(--muted); font-size: 12.5px; }
+.tile .v { font-size: 21px; font-weight: 600; margin-top: 2px; font-family: var(--mono); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.tile .s { color: var(--muted); font-size: 12px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+.chip { border: 1px solid var(--line); background: var(--panel); border-radius: 99px; padding: 4px 12px; cursor: pointer; color: var(--muted); font-size: 13px; }
+.chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.recs { display: grid; gap: 10px; }
+.rec { padding: 14px 16px; display: grid; grid-template-columns: minmax(150px, 0.8fr) minmax(260px, 2fr) minmax(150px, 0.9fr); gap: 14px 22px; align-items: start; }
+.rec .who { min-width: 0; }
+.sym { font-weight: 600; font-size: 16px; border: 0; border-bottom: 1px dotted var(--muted); cursor: pointer; background: none; padding: 0; }
+.sym:hover { color: var(--accent); } .sym:disabled { cursor: default; border-bottom: 0; }
+.who .nm { color: var(--muted); font-size: 12.5px; }
+.who .row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; flex-wrap: wrap; }
+.ladder { position: relative; height: 54px; margin: 6px 34px 0; }
+.ladder .track { position: absolute; left: 0; right: 0; top: 14px; height: 6px; border-radius: 3px; background: var(--line); }
+.ladder .zone { position: absolute; top: 14px; height: 6px; }
+.ladder .zone.l { background: var(--loss); opacity: .75; } .ladder .zone.g { background: var(--gain); opacity: .75; }
+.ladder .mk { position: absolute; top: 8px; width: 2px; height: 18px; background: var(--ink); transform: translateX(-1px); }
+.ladder .lb { position: absolute; top: 30px; transform: translateX(-50%); font-size: 11.5px; text-align: center; white-space: nowrap; line-height: 1.25; }
+.ladder .lb b { display: block; font-weight: 500; color: var(--muted); font-size: 11px; }
+.facts { display: grid; gap: 6px; font-size: 13px; margin: 0; }
+.facts div { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+.facts .k { color: var(--muted); }
+.meter { width: 84px; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; display: inline-block; vertical-align: middle; margin-right: 6px; }
+.meter i { display: block; height: 100%; background: var(--accent); }
+.rec .why { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; border-top: 1px solid var(--line); padding-top: 10px; }
+.rec .why ul { margin: 0; padding-left: 18px; color: var(--muted); font-size: 13px; flex: 1 1 320px; min-width: 0; }
+.btn { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; font-size: 13px; font-weight: 500; }
+.btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.primary:hover:not(:disabled) { color: #fff; filter: brightness(1.08); }
+.btn.danger { border-color: var(--loss); color: var(--loss); } .btn.danger:hover:not(:disabled) { border-color: var(--loss); color: var(--loss); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .chip[aria-pressed="true"], :root:not([data-theme="light"]) .btn.primary, :root:not([data-theme="light"]) .btn.primary:hover:not(:disabled) { color: #06232c; } }
+:root[data-theme="dark"] .chip[aria-pressed="true"], :root[data-theme="dark"] .btn.primary, :root[data-theme="dark"] .btn.primary:hover:not(:disabled) { color: #06232c; }
+.ticket { font-family: var(--mono); font-size: 12px; user-select: all; }
+.tw { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td.wrap-ok { white-space: normal; min-width: 220px; }
+th { color: var(--muted); font-weight: 500; font-size: 12.5px; } tr:last-child td { border-bottom: 0; }
+td.r, th.r { text-align: right; }
+.chart { position: relative; padding: 10px 6px 4px 6px; } .chart svg { display: block; width: 100%; }
+.tip { position: absolute; pointer-events: none; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; font-size: 12px; box-shadow: 0 4px 14px rgba(0,0,0,.14); display: none; z-index: 2; white-space: nowrap; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; padding: 2px 12px 10px; font-size: 12.5px; color: var(--muted); }
+.legend i { display: inline-block; width: 14px; height: 3px; vertical-align: middle; margin-right: 6px; border-radius: 2px; }
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; } .two > * { min-width: 0; }
+.pad { padding: 14px 16px; }
+.sc { display: grid; grid-template-columns: 92px 1fr 44px; gap: 10px; align-items: center; margin: 8px 0; font-size: 13px; }
+.dv { position: relative; height: 8px; background: var(--line); border-radius: 4px; }
+.dv::after { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: var(--muted); }
+.dv i { position: absolute; top: 0; bottom: 0; border-radius: 4px; }
+.field { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; min-width: 0; }
+.bars { display: grid; gap: 12px; }
+.bar { display: grid; grid-template-columns: 150px 1fr 110px; gap: 10px; align-items: center; font-size: 13px; }
+.bar .tr { position: relative; height: 10px; background: var(--line); border-radius: 5px; } .bar .tr i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 5px; background: var(--accent); }
+.tv { height: 520px; overflow: hidden; }
+footer { color: var(--muted); font-size: 12.5px; border-top: 1px solid var(--line); margin-top: 32px; padding-top: 14px; max-width: 80ch; }
+.status { position: fixed; left: 50%; transform: translateX(-50%); bottom: max(16px, env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--bg); padding: 8px 14px; border-radius: 8px; font-size: 13px; z-index: 20; max-width: 90vw; }
+[hidden] { display: none !important; }
+@media (max-width: 760px) { .rec { grid-template-columns: 1fr; } .statusline { margin-left: 0; } .bar { grid-template-columns: 1fr; gap: 4px; } }
+@media (prefers-reduced-motion: no-preference) { .tab, .chip, .btn { transition: color .12s, border-color .12s, background .12s; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <span class="brand">StockBot</span>
+    <span class="pill sample" id="demoPill" hidden>Demo data: fictional stocks</span>
+    <div class="statusline"><span id="updText"></span><button class="btn" id="updBtn" hidden>Update now</button></div>
+  </header>
+  <div id="tape"></div>
+  <nav class="tabs" role="tablist" aria-label="Sections" id="tabs"></nav>
+  <main id="view" aria-live="polite"></main>
+  <footer>
+    Not financial advice. Recommendations come from an automated model, can be wrong, and past results do not guarantee future
+    results. You place every trade yourself, or approve each order yourself, and you are responsible for your decisions. Only risk
+    money you can afford to lose.
+  </footer>
+</div>
+<div class="status" id="status" role="status" hidden></div>
+
+<script>
+"use strict";
+/* ---------- helpers ---------- */
+const $ = (s, r = document) => r.querySelector(s);
+const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const MKT = { SP500: "S&P 500", ASX200: "ASX 200", NIFTY50: "Nifty 50" };
+const CUR = { SP500: "$", ASX200: "A$", NIFTY50: "₹" };
+const fmt = (n, d = 2) => Number(n).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
+const sgn = n => (n > 0 ? "+" : n < 0 ? "−" : "");
+const pct = (n, d = 1) => sgn(n) + Math.abs(n).toFixed(d) + "%";
+const money = (n, cur = "$", d = 0) => (n < 0 ? "−" : "") + cur + fmt(Math.abs(n), d);
+const big = (n, cur = "") => (n == null ? "–" : cur + (Math.abs(n) >= 1e9 ? (n / 1e9).toFixed(1) + "B" : (n / 1e6).toFixed(0) + "M"));
+const cls = n => (n > 0 ? "pos" : n < 0 ? "neg" : "muted");
+const dShort = iso => +iso.slice(8, 10) + " " + MON[+iso.slice(5, 7) - 1];
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const sd = s => { try { return sessionStorage.getItem(s) || ""; } catch { return ""; } };
+const ss = (s, v) => { try { sessionStorage.setItem(s, v); } catch {} };
+function niceStep(raw) { const p = Math.pow(10, Math.floor(Math.log10(raw))); const f = raw / p; return (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * p; }
+const mk = r => ({ ...r, cur: CUR[r.market] || "$", mkt: MKT[r.market] || r.market });
+
+async function api(path) {
+  const r = await fetch(path, { cache: "no-store" });
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) { const e = new Error(body.detail || "Request failed (" + r.status + ")"); e.status = r.status; throw e; }
+  return body;
+}
+async function post(path, token) {
+  const r = await fetch(path, { method: "POST", headers: { "X-Requested-With": "stockbot", "X-Approve-Token": token || "" } });
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(body.detail || "Request failed (" + r.status + ")");
+  return body;
+}
+function toast(msg) { const s = $("#status"); s.textContent = msg; s.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => (s.hidden = true), 4200); }
+
+/* ---------- charts (drawn to scale, themed through CSS variables) ---------- */
+function lineChart(el, o) {
+  const W = Math.max(280, el.clientWidth - 12), H = o.height || 280, m = { l: o.yw || 54, r: 14, t: 12, b: 24 };
+  const n = o.dates.length, iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const all = o.series.flatMap(s => s.values.filter(v => v != null)).concat((o.lines || []).map(l => l.y));
+  let lo = Math.min(...all), hi = Math.max(...all); const pad = (hi - lo) * 0.07 || 1; lo -= pad; hi += pad;
+  const X = i => m.l + (n === 1 ? 0 : (i / (n - 1)) * iw), Y = v => m.t + ((hi - v) / (hi - lo)) * ih;
+  const step = niceStep((hi - lo) / 4); let g = "", t = Math.ceil(lo / step) * step;
+  for (; t <= hi; t += step) g += `<line x1="${m.l}" x2="${W - m.r}" y1="${Y(t)}" y2="${Y(t)}" stroke="var(--line)"/><text x="${m.l - 8}" y="${Y(t) + 4}" text-anchor="end" font-size="11" fill="var(--muted)" class="num">${o.yfmt(t)}</text>`;
+  let xl = ""; for (let k = 0; k < 5; k++) { const i = Math.round((k / 4) * (n - 1)); xl += `<text x="${X(i)}" y="${H - 6}" text-anchor="${k === 0 ? "start" : k === 4 ? "end" : "middle"}" font-size="11" fill="var(--muted)">${dShort(o.dates[i])}</text>`; }
+  let paths = "";
+  for (const s of o.series) {
+    let d = "", started = false;
+    s.values.forEach((v, i) => { if (v == null) { started = false; return; } d += (started ? "L" : "M") + X(i).toFixed(1) + " " + Y(v).toFixed(1); started = true; });
+    if (s.area) paths += `<path d="${d}L${X(n - 1)} ${m.t + ih}L${X(0)} ${m.t + ih}Z" fill="${s.color}" opacity=".12"/>`;
+    paths += `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="${s.w || 2}" ${s.dash ? `stroke-dasharray="${s.dash}"` : ""} stroke-linejoin="round"/>`;
+  }
+  let lines = "";
+  for (const l of o.lines || []) lines += `<line x1="${m.l}" x2="${W - m.r}" y1="${Y(l.y)}" y2="${Y(l.y)}" stroke="${l.color}" stroke-dasharray="5 4"/><text x="${W - m.r - 4}" y="${Y(l.y) - 4}" text-anchor="end" font-size="11" fill="${l.color}" stroke="var(--panel)" stroke-width="3" paint-order="stroke">${l.label}</text>`;
+  const last = o.series[0], ex = X(n - 1), ey = Y(last.values[n - 1]);
+  el.innerHTML = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(o.aria)}">${g}${xl}${paths}${lines}<circle cx="${ex}" cy="${ey}" r="4" fill="${last.color}" stroke="var(--panel)" stroke-width="2"/><line id="cx" y1="${m.t}" y2="${m.t + ih}" stroke="var(--muted)" stroke-dasharray="3 3" style="display:none"/></svg><div class="tip"></div>`;
+  const svg = el.firstChild, cx = svg.querySelector("#cx"), tip = el.querySelector(".tip");
+  svg.addEventListener("pointermove", e => {
+    const r = svg.getBoundingClientRect(), i = Math.max(0, Math.min(n - 1, Math.round(((e.clientX - r.left - m.l) / iw) * (n - 1))));
+    cx.setAttribute("x1", X(i)); cx.setAttribute("x2", X(i)); cx.style.display = "";
+    tip.innerHTML = `<b>${dShort(o.dates[i])}</b>` + o.series.filter(s => s.values[i] != null).map(s => `<div><span style="color:${s.color}">●</span> ${esc(s.name)} <span class="num">${o.yfmt(s.values[i])}</span></div>`).join("");
+    tip.style.display = "block"; const tw = tip.offsetWidth; tip.style.left = Math.min(Math.max(4, X(i) + 12), W - tw - 4) + "px"; tip.style.top = "14px";
+  });
+  svg.addEventListener("pointerleave", () => { cx.style.display = "none"; tip.style.display = "none"; });
+}
+function barChart(el, data) {
+  const W = Math.max(280, el.clientWidth - 12), H = 240, m = { l: 40, r: 10, t: 14, b: 26 }, iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const Y = v => m.t + (1 - v) * ih, bw = Math.min(64, (iw / data.length) * 0.55); let s = "";
+  for (const v of [0, 0.25, 0.5, 0.75, 1]) s += `<line x1="${m.l}" x2="${W - m.r}" y1="${Y(v)}" y2="${Y(v)}" stroke="${v === 0.5 ? "var(--muted)" : "var(--line)"}" ${v === 0.5 ? 'stroke-dasharray="5 4"' : ""}/><text x="${m.l - 6}" y="${Y(v) + 4}" text-anchor="end" font-size="11" fill="var(--muted)" class="num">${v * 100}%</text>`;
+  data.forEach(([mo, wr, nTrades], i) => {
+    const cxm = m.l + (iw / data.length) * (i + 0.5);
+    s += `<rect x="${cxm - bw / 2}" y="${Y(wr)}" width="${bw}" height="${Y(0) - Y(wr)}" rx="3" fill="var(--accent)"/><text x="${cxm}" y="${Y(wr) - 6}" text-anchor="middle" font-size="12" fill="var(--ink)" class="num">${Math.round(wr * 100)}%</text><text x="${cxm}" y="${H - 8}" text-anchor="middle" font-size="11.5" fill="var(--muted)">${esc(mo)} (${nTrades})</text>`;
+  });
+  el.innerHTML = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Win rate by month">${s}</svg>`;
+}
+
+/* ---------- TradingView embeds (need internet in your browser; skipped in demo mode) ---------- */
+const isDark = () => document.documentElement.dataset.theme === "dark" || (document.documentElement.dataset.theme !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
+function tvWidget(el, name, cfg, fallback) {
+  el.innerHTML = '<div class="tradingview-widget-container__widget" style="height:100%;width:100%"></div>';
+  const s = document.createElement("script");
+  s.src = "https://s3.tradingview.com/external-embedding/" + name; s.async = true;
+  s.onerror = () => { el.innerHTML = fallback ? `<p class="muted pad">${fallback}</p>` : ""; };
+  s.text = JSON.stringify({ autosize: true, colorTheme: isDark() ? "dark" : "light", theme: isDark() ? "dark" : "light", locale: "en", ...cfg });
+  el.appendChild(s);
+}
+const tvSymbol = s => s.endsWith(".AX") ? "ASX:" + s.slice(0, -3) : s.endsWith(".NS") ? "NSE:" + s.slice(0, -3) : s.replace("-", ".");
+
+/* ---------- state + shell ---------- */
+const S = { view: "today", mkt: "ALL", sym: null, filter: "ALL", health: null, tickers: null, armed: null, token: sd("stockbot-token"), seq: 0, wasRunning: false };
+const VIEWS = [["today", "Today"], ["stock", "Stock"], ["portfolio", "Paper portfolio"], ["orders", "Orders"], ["performance", "Model performance"], ["history", "History"]];
+
+async function loadHealth() {
+  try { S.health = await api("/api/health"); } catch { S.health = null; }
+  const h = S.health;
+  $("#demoPill").hidden = !(h && h.demo);
+  const u = h && h.update;
+  $("#updBtn").hidden = !h || h.demo;
+  $("#updBtn").disabled = !!(u && u.running);
+  $("#updBtn").textContent = u && u.running ? "Updating…" : "Update now";
+  let t = "";
+  if (!h) t = "Server not reachable";
+  else if (u && u.running) t = "Updating data… this can take several minutes the first time";
+  else {
+    t = h.last_price_date ? "Prices to " + h.last_price_date : "No data yet";
+    if (u && u.scheduled && u.next_run) { const d = new Date(u.next_run); t += " · next update " + d.toLocaleString("en-AU", { weekday: "short", hour: "numeric", minute: "2-digit" }); }
+    else if (!h.demo) t += " · automatic updates off";
+    if (u && u.last_status && u.last_status !== "ok") t += " · last update " + u.last_status;
+  }
+  $("#updText").textContent = t;
+  if (h && !h.demo && !loadHealth.tv) { loadHealth.tv = true; tvWidget($("#tape"), "embed-widget-ticker-tape.js", { symbols: [{ proName: "FOREXCOM:SPXUSD", title: "S&P 500" }, { proName: "FOREXCOM:NSXUSD", title: "Nasdaq 100" }, { proName: "ASX:XJO", title: "ASX 200" }, { proName: "NSE:NIFTY", title: "Nifty 50" }], showSymbolLogo: false, isTransparent: true, displayMode: "adaptive" }); $("#tape").style.minHeight = "46px"; }
+  return h;
+}
+
+const emptyNoData = `<div class="panel empty"><h3>No data yet</h3><p>The database is empty. Load market data once with <code>python -m app.run_daily</code> (the first run downloads about two years of prices and takes a while), or start the site with <code>python -m app.serve --schedule</code> and it will do this by itself.</p><p>Want to see the site working first? Start it with <code>python -m app.serve --demo</code>.</p></div>`;
+
+async function viewToday() {
+  const [recs0, hist, h] = await Promise.all([api("/api/recommendations"), api("/api/recommendations/history"), S.health]);
+  const recs = recs0.map(mk).filter(r => S.mkt === "ALL" || r.market === S.mkt).sort((a, b) => b.confidence - a.confidence);
+  const closed = hist.filter(x => x.outcome && x.outcome.status !== "OPEN"), wins = closed.filter(x => x.outcome.status === "WIN").length;
+  const buys = recs.filter(r => r.action === "BUY").length, u = h && h.update;
+  const next = h && h.demo ? "Demo: no updates" : u && u.scheduled && u.next_run ? new Date(u.next_run).toLocaleString("en-AU", { weekday: "short", hour: "numeric", minute: "2-digit" }) : "Click Update now";
+  const markets = [...new Set(recs0.map(r => r.market))];
+  const chips = markets.length > 1 ? `<div class="chips" role="group" aria-label="Filter by market"><button class="chip" data-mkt="ALL" aria-pressed="${S.mkt === "ALL"}">All markets</button>${markets.map(k => `<button class="chip" data-mkt="${k}" aria-pressed="${S.mkt === k}">${MKT[k] || k}</button>`).join("")}</div>` : "";
+  let body;
+  if (!recs0.length) {
+    body = h && h.tickers === 0 ? emptyNoData : `<div class="panel empty"><h3>No recommendations right now</h3><p>No stock is above the model's signal threshold${h && h.last_recommendation ? " (last recommendation: " + esc(h.last_recommendation.slice(0, 10)) + ")" : ""}. That is normal on many days. The model only speaks up when several signals agree.</p></div>`;
+  } else {
+    body = `<div class="recs">${recs.map(r => {
+      const rr = Math.abs(r.target - r.entry) / Math.abs(r.entry - r.stop);
+      return `<article class="panel rec">
+        <div class="who"><div class="row"><button class="sym" data-sym="${esc(r.symbol)}">${esc(r.symbol)}</button><span class="pill ${r.action === "BUY" ? "buy" : "sell"}">${r.action === "BUY" ? "BUY" : "SELL / EXIT"}</span></div>
+          <div class="nm">${esc(r.name)} · ${esc(r.mkt)}</div><div class="nm">${esc(r.sector)}</div></div>
+        ${ladder(r)}
+        <dl class="facts"><div><span class="k">Size</span><span class="num">${r.sizePct}% of portfolio</span></div>
+          <div><span class="k">Signal strength</span><span><span class="meter"><i style="width:${Math.round(r.confidence * 100)}%"></i></span><span class="num">${Math.round(r.confidence * 100)}%</span></span></div>
+          <div><span class="k">Reward : risk</span><span class="num">${rr.toFixed(1)} : 1</span></div></dl>
+        <div class="why"><ul>${r.reasons.map(w => `<li>${esc(w)}</li>`).join("")}</ul><button class="btn" data-copy="${r.id}">Copy order details</button></div>
+      </article>`;
+    }).join("")}</div>`;
+  }
+  S.recsById = Object.fromEntries(recs0.map(mk).map(r => [r.id, r]));
+  return `<h1>Today's recommendations</h1>
+  <p class="lead">Place these yourself in your broker app, or turn on one-tap approval on the Orders page. Each one shows where to get in, where to get out if it goes wrong, and where the model expects to take profit.</p>
+  ${h && h.demo ? `<p class="note"><b>Demo data.</b> The companies and prices are fictional and random. The model, grading and portfolio code are the real thing, running on that fake data.</p>` : ""}
+  <div class="tiles">
+    <div class="panel tile"><div class="k">Recommendations</div><div class="v">${recs0.length}</div></div>
+    <div class="panel tile"><div class="k">Buy / Sell</div><div class="v">${buys} / ${recs.length - buys}</div></div>
+    <div class="panel tile"><div class="k">Win rate, closed calls</div><div class="v">${closed.length ? Math.round((wins / closed.length) * 100) + "%" : "–"}</div><div class="s">${closed.length} closed</div></div>
+    <div class="panel tile"><div class="k">Next update</div><div class="v" style="font-size:16px;font-family:var(--font)">${esc(next)}</div></div>
+  </div>
+  <h2>Recommendations</h2>${chips}${body}`;
+}
+function ladder(r) {
+  const lo = Math.min(r.stop, r.target), hi = Math.max(r.stop, r.target), p = v => ((v - lo) / (hi - lo)) * 100, f = v => fmt(v, v >= 1000 ? 1 : 2);
+  const a = Math.min(p(r.stop), p(r.entry)), b = Math.abs(p(r.entry) - p(r.stop)), c = Math.min(p(r.entry), p(r.target)), d = Math.abs(p(r.target) - p(r.entry));
+  const items = [["Stop", r.stop, p(r.stop)], ["Entry", r.entry, p(r.entry)], ["Target", r.target, p(r.target)]];
+  return `<div class="ladder" aria-label="Stop ${f(r.stop)}, entry ${f(r.entry)}, target ${f(r.target)}"><div class="track"></div><div class="zone l" style="left:${a}%;width:${b}%"></div><div class="zone g" style="left:${c}%;width:${d}%"></div>` +
+    items.map(([k, v, x]) => `<div class="mk" style="left:${x}%"></div><div class="lb num" style="left:${x}%"><b>${k}</b>${r.cur}${f(v)}</div>`).join("") + `</div>`;
+}
+const ticket = r => `${r.action} ${r.symbol}: limit ${r.cur}${fmt(r.entry)}, stop ${r.cur}${fmt(r.stop)}, target ${r.cur}${fmt(r.target)}, size ${r.sizePct}% of portfolio`;
+
+async function viewStock() {
+  const [tickers, recs, hist, h] = await Promise.all([S.tickers || api("/api/tickers"), api("/api/recommendations"), api("/api/recommendations/history"), S.health]);
+  S.tickers = tickers;
+  if (!tickers.length) return `<h1>Stock</h1>${emptyNoData}`;
+  if (!S.sym || !tickers.some(t => t.symbol === S.sym)) S.sym = (recs[0] || tickers[0]).symbol;
+  const sym = S.sym, tk = tickers.find(t => t.symbol === sym), cur = CUR[tk.market] || "$";
+  const rec = recs.find(r => r.symbol === sym) || hist.find(r => r.symbol === sym && (!r.outcome || r.outcome.status === "OPEN"));
+  const R = rec ? mk(rec) : null;
+  const picker = `<label class="muted" for="symIn">Stock&nbsp;</label><input class="field" id="symIn" list="symList" value="${esc(sym)}" size="14" autocomplete="off" spellcheck="false"><datalist id="symList">${tickers.map(t => `<option value="${esc(t.symbol)}">${esc(t.name)}</option>`).join("")}</datalist> <span class="muted">${esc(tk.name || "")} · ${esc(MKT[tk.market] || tk.market)}${tk.sector ? " · " + esc(tk.sector) : ""}</span>`;
+  let bars = [];
+  try { bars = await api("/api/prices/" + encodeURIComponent(sym) + "?days=250"); } catch (e) { if (e.status !== 404) throw e; }
+  const [fund, news] = await Promise.all([api("/api/fundamentals/" + encodeURIComponent(sym)), api("/api/news?symbol=" + encodeURIComponent(sym))]);
+  let head = `<h1>${esc(sym)} ${R ? `<span class="pill ${R.action === "BUY" ? "buy" : "sell"}">${R.action === "BUY" ? "BUY" : "SELL / EXIT"}</span>` : ""}</h1>`;
+  let chart = `<div class="panel empty"><h3>No price data for ${esc(sym)} yet</h3><p>Prices appear after the next update.</p></div>`;
+  if (bars.length > 2) {
+    const c = bars.map(b => b.close), n = c.length, chg = (c[n - 1] / c[n - 2] - 1) * 100;
+    head += `<p class="lead">Last close <span class="num">${cur}${fmt(c[n - 1], c[n - 1] >= 1000 ? 1 : 2)}</span> <span class="num ${cls(chg)}">${pct(chg, 2)}</span> on ${esc(bars[n - 1].date)}</p>`;
+    const ma = c.map((_, i) => (i < 49 ? null : c.slice(i - 49, i + 1).reduce((a, b) => a + b, 0) / 50));
+    S.chart = { sym, dates: bars.map(b => b.date), c, ma, R, hi: c[n - 1] };
+    chart = `<div class="panel"><div class="chart" id="pc"></div><div class="legend"><span><i style="background:var(--accent)"></i>Close</span><span><i style="background:var(--warn)"></i>50-day average</span>${R ? '<span><i style="background:var(--muted)"></i>Entry</span><span><i style="background:var(--gain)"></i>Target</span><span><i style="background:var(--loss)"></i>Stop</span>' : ""}</div></div>`;
+  } else S.chart = null;
+  const bar = v => `<div class="dv"><i style="${v >= 0 ? `left:50%;width:${v * 50}%;background:var(--gain)` : `right:50%;width:${-v * 50}%;background:var(--loss)`}"></i></div>`;
+  const sc = R ? R.scores : null, comb = R ? R.confidence * Math.sign((R.scores.technical + R.scores.fundamental + R.scores.sentiment) || (R.action === "BUY" ? 1 : -1)) : 0;
+  const scoreRow = (l, v) => `<div class="sc"><span>${l}</span>${bar(v)}<span class="num ${cls(v)}">${sgn(v)}${Math.abs(v).toFixed(2)}</span></div>`;
+  const quarters = [...fund].reverse().slice(0, 5).map(f => `<tr><td>${esc(String(f.period_end).slice(0, 10))}</td><td class="r num">${big(f.revenue, cur)}</td><td class="r num">${big(f.net_income, cur)}</td><td class="r num">${big(f.total_debt, cur)}</td><td class="r num">${big(f.free_cash_flow, cur)}</td></tr>`).join("");
+  const newsRows = news.map(x => `<tr><td class="wrap-ok">${/^https?:/.test(x.url || "") ? `<a class="sym" href="${esc(x.url)}" target="_blank" rel="noreferrer noopener">${esc(x.title)}</a>` : esc(x.title)}</td><td class="muted">${esc(x.publisher || "")}</td><td class="r num ${cls((x.sentiment || 0) > 0.15 ? 1 : (x.sentiment || 0) < -0.15 ? -1 : 0)}">${x.sentiment == null ? "–" : sgn(x.sentiment) + Math.abs(x.sentiment).toFixed(1)}</td></tr>`).join("");
+  return `${head}${h && h.demo ? `<p class="note"><b>Demo data.</b> This stock is fictional and its prices are random.</p>` : ""}
+  <p>${picker}</p>
+  <h2>Price, last ${bars.length} trading days</h2>${chart}
+  ${h && !h.demo ? `<h2>Interactive chart (TradingView)</h2><div class="panel tv" id="tv"></div>` : ""}
+  <div class="two">
+    <div><h2>Signal scores (−1 to +1)</h2><div class="panel pad">${R ? scoreRow("Technical", sc.technical) + scoreRow("Fundamentals", sc.fundamental) + scoreRow("News", sc.sentiment) + `<p class="muted" style="margin:6px 0 0;font-size:12.5px">A score of exactly 0 for fundamentals or news usually means no data was available, and that part is left out of the blend.</p>` : `<p class="muted" style="margin:0">No active recommendation for this stock.</p>`}</div></div>
+    <div><h2>Why the model picked it</h2><div class="panel pad">${R ? `<ul style="margin:0;padding-left:18px">${R.reasons.map(w => `<li>${esc(w)}</li>`).join("")}</ul><p class="ticket" style="margin:12px 0 0">${esc(ticket(R))}</p>` : `<p class="muted" style="margin:0">Nothing to explain: the model has no open call on it.</p>`}</div></div>
+  </div>
+  <h2>Company financials, quarterly</h2>${quarters ? `<div class="panel tw"><table><thead><tr><th>Quarter end</th><th class="r">Sales</th><th class="r">Net income</th><th class="r">Total debt</th><th class="r">Free cash flow</th></tr></thead><tbody>${quarters}</tbody></table></div>` : `<div class="panel pad muted">No financial statements stored for this stock yet.</div>`}
+  <h2>Latest news</h2>${newsRows ? `<div class="panel tw"><table><thead><tr><th>Headline</th><th>Source</th><th class="r">Sentiment</th></tr></thead><tbody>${newsRows}</tbody></table></div>` : `<div class="panel pad muted">No headlines stored for this stock yet.</div>`}`;
+}
+function drawStock() {
+  const s = S.chart; if (s && $("#pc")) {
+    const r = s.R, f = v => fmt(v, v >= 1000 ? 0 : 2);
+    lineChart($("#pc"), { dates: s.dates, height: 300, yw: s.hi >= 1000 ? 62 : 50, yfmt: f, aria: `${s.sym} price chart`,
+      series: [{ name: "Close", values: s.c, color: "var(--accent)" }, { name: "50-day avg", values: s.ma, color: "var(--warn)", w: 1.5, dash: "4 3" }],
+      lines: r ? [{ y: r.entry, label: "entry", color: "var(--muted)" }, { y: r.target, label: "target", color: "var(--gain)" }, { y: r.stop, label: "stop", color: "var(--loss)" }] : [] });
+  }
+  const tv = $("#tv"); if (tv) tvWidget(tv, "embed-widget-advanced-chart.js", { symbol: tvSymbol(S.sym), interval: "D", timezone: "Australia/Sydney", style: "1", allow_symbol_change: false, support_host: "https://www.tradingview.com" }, "The interactive chart needs an internet connection.");
+}
+
+async function viewPortfolio() {
+  const [p, h] = await Promise.all([api("/api/portfolio"), S.health]);
+  const inv = p.positions.reduce((a, x) => a + x.value, 0), cost = p.positions.reduce((a, x) => a + x.notional, 0), total = p.cash + inv, L = p.limits;
+  const bySector = {}; p.positions.forEach(x => bySector[x.sector] = (bySector[x.sector] || 0) + x.value);
+  const sectors = Object.entries(bySector).sort((a, b) => b[1] - a[1]).map(([s, v]) => { const w = (v / total) * 100; return `<div class="bar"><span>${esc(s)}</span><div class="tr"><i style="width:${Math.min(100, (w / L.max_sector_pct) * 100)}%"></i></div><span class="num">${w.toFixed(1)}% of ${L.max_sector_pct}%</span></div>`; }).join("") || `<span class="muted">No open positions.</span>`;
+  const maxPos = Math.max(0, ...p.positions.map(x => (x.value / total) * 100)), cashPct = (p.cash / total) * 100;
+  const rows = p.positions.map(x => { const w = (x.value / total) * 100, ret = ((x.last - x.avgPrice) / x.avgPrice) * 100 - 0.2; return `<tr><td><button class="sym" data-sym="${esc(x.symbol)}">${esc(x.symbol)}</button></td><td class="muted">${esc(x.sector)}</td><td class="r num">${fmt(x.avgPrice)}</td><td class="r num">${fmt(x.last)}</td><td class="r num">${money(x.notional)}</td><td class="r num">${w.toFixed(1)}%</td><td class="r num ${cls(ret)}">${pct(ret, 1)}</td></tr>`; }).join("");
+  return `<h1>Paper portfolio</h1>
+  <p class="lead">A simulated portfolio with fake money that follows the model's buy recommendations, so you can see how they would do before risking real money.</p>
+  ${h && h.demo ? `<p class="note"><b>Demo data.</b> Fictional stocks and random prices.</p>` : ""}
+  <div class="tiles">
+    <div class="panel tile"><div class="k">Total value</div><div class="v">${money(total)}</div><div class="s ${cls(total - p.start_cash)}">${pct(((total - p.start_cash) / p.start_cash) * 100, 2)} since start</div></div>
+    <div class="panel tile"><div class="k">Cash</div><div class="v">${money(p.cash)}</div><div class="s">${cashPct.toFixed(1)}% of portfolio</div></div>
+    <div class="panel tile"><div class="k">Open profit / loss</div><div class="v ${cls(inv - cost)}">${money(inv - cost)}</div><div class="s">${p.positions.length} open positions</div></div>
+    <div class="panel tile"><div class="k">Closed trades</div><div class="v">${p.closed_trades}</div><div class="s">${p.win_rate == null ? "no win rate yet" : Math.round(p.win_rate * 100) + "% won · " + money(p.realised_pnl) + " realised"}</div></div>
+  </div>
+  <h2>Value over time</h2>${p.equity.length > 1 ? `<div class="panel"><div class="chart" id="ec"></div></div>` : `<div class="panel empty"><h3>The chart starts after the second update</h3><p>One point is recorded per update.</p></div>`}
+  <h2>Positions</h2>${rows ? `<div class="panel tw"><table><thead><tr><th>Stock</th><th>Sector</th><th class="r">Entry</th><th class="r">Last</th><th class="r">Invested</th><th class="r">Weight</th><th class="r">Return</th></tr></thead><tbody>${rows}</tbody></table></div>` : `<div class="panel empty"><h3>No open positions</h3><p>Positions open when the model recommends a BUY and there is room within the limits below.</p></div>`}
+  <h2>Risk limits</h2>
+  <div class="two"><div class="panel pad"><div class="bars">${sectors}</div></div>
+  <div class="panel pad"><div class="facts">
+    <div><span class="k">Largest position</span><span class="num">${maxPos.toFixed(1)}% (limit ${L.max_position_pct}%)</span></div>
+    <div><span class="k">Cash reserve</span><span class="num">${cashPct.toFixed(1)}% (minimum ${L.min_cash_pct}%)</span></div>
+    <div><span class="k">Open positions</span><span class="num">${p.positions.length} (limit ${L.max_positions})</span></div>
+    <div><span class="k">Daily loss stop</span><span class="num">pauses new entries at −${L.daily_dd_stop_pct}%</span></div>
+    <div><span class="k">Paper kill switch</span><span class="pill ${p.paused ? "sell" : "open"}">${p.paused ? "On: no new entries" : "Off"}</span></div>
+  </div><p class="muted" style="font-size:12.5px;margin:10px 0 0">Long-only. Currency moves between markets are ignored. Pause new paper entries with <code>python -m app.portfolio pause</code>.</p></div></div>`;
+}
+function drawPortfolio() {
+  const el = $("#ec"); if (!el) return;
+  api("/api/portfolio").then(p => lineChart(el, { dates: p.equity.map(e => e.date), height: 260, yw: 62, yfmt: x => fmt(x, 0), aria: "Paper portfolio value over time",
+    series: [{ name: "Portfolio", values: p.equity.map(e => e.value), color: "var(--accent)", area: true }], lines: [{ y: p.start_cash, label: "start", color: "var(--muted)" }] }));
+}
+
+async function viewOrders() {
+  const [st, tickets] = await Promise.all([api("/api/execution/status"), api("/api/tickets")]);
+  const pend = tickets.filter(t => t.status === "PENDING"), past = tickets.filter(t => t.status !== "PENDING"), L = st.limits;
+  const can = st.web_approval_enabled && st.mode !== "manual" && !st.halted;
+  const head = `<h1>Orders</h1><p class="lead">One-tap approval. Nothing is sent to your broker until you approve that specific order, and every limit below is checked again at that moment.</p>`;
+  if (st.mode === "manual") return head + `<div class="panel empty"><h3>Manual mode</h3><p>${esc(st.message)}</p><p>To turn on approvals: create a free Alpaca <b>paper</b> account, put the keys in <code>backend/.env</code> (see <code>.env.example</code>), set <code>STOCKBOT_BROKER=alpaca</code> and a long random <code>STOCKBOT_APPROVE_TOKEN</code>, then restart. Alpaca trades US stocks only. Until then, use the Today page and place trades in your own broker app.</p></div>`;
+  const rows = pend.map(t => {
+    const armed = S.armed === t.id;
+    const act = armed ? `<div>Send ${t.side.toUpperCase()} ${t.qty} ${esc(t.symbol)} to your <b>${t.mode === "live" ? "LIVE" : "paper"}</b> account?</div><div style="display:flex;gap:6px;margin-top:6px"><button class="btn primary" data-ord="send" data-id="${t.id}">Yes, send it</button><button class="btn" data-ord="back">Back</button></div>`
+      : `<div style="display:flex;gap:6px"><button class="btn primary" data-ord="arm" data-id="${t.id}" ${can ? "" : "disabled"}>Approve</button><button class="btn" data-ord="reject" data-id="${t.id}" ${can ? "" : "disabled"}>Reject</button></div>`;
+    return `<tr><td><button class="sym" data-sym="${esc(t.symbol)}">${esc(t.symbol)}</button></td><td><span class="pill ${t.side === "buy" ? "buy" : "sell"}">${t.side === "buy" ? "BUY" : "SELL (close)"}</span> ${t.qty} shares</td><td class="num">${t.limitPrice ? "limit " + fmt(t.limitPrice) : "market"}</td><td class="num">${t.stop ? fmt(t.stop) + " / " + fmt(t.target) : "–"}</td><td class="r num">${money(t.notional)}</td><td class="wrap-ok">${act}</td></tr>`;
+  }).join("");
+  const done = past.map(t => `<tr><td class="num">${esc((t.decided || t.created).slice(0, 16).replace("T", " "))}</td><td><b>${esc(t.symbol)}</b></td><td>${t.side.toUpperCase()} ${t.qty}${t.mode ? " (" + esc(t.mode) + ")" : ""}</td><td><span class="pill ${t.status === "SUBMITTED" ? "buy" : t.status === "FAILED" ? "sell" : "open"}">${esc(t.status)}</span></td><td class="wrap-ok muted">${esc(t.message)}</td></tr>`).join("");
+  return `${head}
+  <div class="tiles">
+    <div class="panel tile"><div class="k">Account</div><div class="v" style="font-size:18px;font-family:var(--font)">${st.connected ? (st.mode === "live" ? "LIVE MONEY" : "Paper money") : "Not connected"}</div><div class="s ${st.mode === "live" ? "neg" : ""}">${st.mode === "live" ? "Real money. Orders are real." : esc(st.message || st.broker)}</div></div>
+    <div class="panel tile"><div class="k">Equity / cash</div><div class="v">${st.equity != null ? money(st.equity) : "–"}</div><div class="s">${st.cash != null ? money(st.cash) + " cash" : ""}</div></div>
+    <div class="panel tile"><div class="k">Approved today</div><div class="v">${st.today.orders} / ${L.max_daily_orders}</div><div class="s">${money(st.today.usd)} of ${money(L.max_daily_usd)}</div></div>
+    <div class="panel tile"><div class="k">Largest single order</div><div class="v">${money(L.max_order_usd)}</div><div class="s">Tickets expire after ${L.ticket_ttl_hours} hours</div></div>
+  </div>
+  <div class="panel pad" style="margin-top:12px;display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center">
+    <label for="tokIn" class="muted">Approval token</label><input class="field" id="tokIn" type="password" autocomplete="off" placeholder="your STOCKBOT_APPROVE_TOKEN" value="${esc(S.token)}" size="26">
+    <button class="btn ${st.halted ? "" : "danger"}" data-ord="halt" ${st.web_approval_enabled ? "" : "disabled"}>${st.halted ? "Turn kill switch off" : "Kill switch: stop all orders"}</button>
+    ${st.halted ? '<span class="neg">Kill switch is ON: no orders can be approved.</span>' : ""}
+    ${st.web_approval_enabled ? "" : '<span class="muted">Website approval is off: set <code>STOCKBOT_APPROVE_TOKEN</code> and restart, or use <code>python -m app.execution approve ID</code>.</span>'}
+  </div>
+  <h2>Waiting for your approval</h2>
+  ${rows ? `<div class="panel tw"><table><thead><tr><th>Stock</th><th>Order</th><th>Entry</th><th>Stop / Target</th><th class="r">Cost</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : `<div class="panel pad muted">Nothing waiting. New tickets appear after each update.</div>`}
+  <h2>Recent orders</h2>
+  ${done ? `<div class="panel tw"><table><thead><tr><th>When</th><th>Stock</th><th>Order</th><th>Status</th><th>Detail</th></tr></thead><tbody>${done}</tbody></table></div>` : `<div class="panel pad muted">No orders yet.</div>`}
+  <p class="muted" style="font-size:12.5px;max-width:75ch">Buys carry a stop-loss and a take-profit. Entry orders stay open until they fill or you cancel them (<code>python -m app.execution cancel ID</code> or in your broker app). Alpaca trades US stocks only.</p>`;
+}
+
+async function viewPerformance() {
+  const [d, h] = await Promise.all([api("/api/performance"), S.health]);
+  const warn = d.log.find(l => l.decision === "warning");
+  const bt = d.backtest || {}, rowOf = (name, m) => !m || !m.trades ? "" : `<tr><td><b>${name}</b></td><td class="r num">${m.trades}</td><td class="r num">${Math.round(m.win_rate * 100)}%</td><td class="r num ${cls(m.avg_trade_pct)}">${pct(m.avg_trade_pct, 2)}</td><td class="r num">${pct(m.avg_win_pct, 2)} / ${pct(m.avg_loss_pct, 2)}</td><td class="r num">${m.profit_factor == null ? "–" : m.profit_factor.toFixed(2)}</td><td class="r num">${m.approx_max_drawdown_pct.toFixed(1)}%</td></tr>`;
+  const btRows = rowOf("In-sample", bt.in_sample) + rowOf("Out-of-sample", bt.out_of_sample);
+  const vr = d.versions.map(v => `<tr><td><b>${esc(v.version)}</b>${v.version === d.active ? ' <span class="pill open">active</span>' : ""}</td><td>${esc(v.promoted)}</td><td class="r num">${Math.round(v.winRate * 100)}%</td><td class="r num ${cls(v.backtestReturnPct)}">${pct(v.backtestReturnPct, 1)}</td><td class="wrap-ok muted">${esc(v.note)}</td></tr>`).join("");
+  const lg = d.log.map(l => `<tr><td class="num">${esc(l.date)}</td><td class="wrap-ok">${esc(l.change)}</td><td><span class="pill ${l.decision === "promoted" ? "buy" : l.decision === "skipped" ? "open" : "sell"}">${esc(l.decision)}</span></td><td class="wrap-ok muted">${esc(l.reason)}</td></tr>`).join("");
+  S.acc = d.accuracy.map(a => [a.month.length >= 7 ? MON[+a.month.slice(5, 7) - 1] + " " + a.month.slice(0, 4) : a.month, a.winRate, a.n]);
+  return `<h1>Model performance</h1>
+  <p class="lead">How often past recommendations were right. A new model version only replaces the current one if it beats it on data it was not tuned on.</p>
+  ${h && h.demo ? `<p class="note"><b>Demo data.</b> These numbers describe random fictional prices.</p>` : ""}
+  ${warn ? `<p class="note" style="background:var(--loss-soft)"><b>Model warning (${esc(warn.date)}).</b> ${esc(warn.reason)}</p>` : ""}
+  <h2>Win rate by month (number of closed calls)</h2>${S.acc.length ? `<div class="panel"><div class="chart" id="wr"></div></div><p class="muted" style="max-width:70ch">The dashed line is 50%. A win rate near 50% is not an edge by itself. Look at the average win against the average loss too.</p>` : `<div class="panel empty"><h3>No graded calls yet</h3><p>Each recommendation is graded win or loss once it hits its stop, its target, or 20 days pass.</p></div>`}
+  <h2>Backtest on past prices (technical score${bt.version ? ", " + esc(bt.version) : ""})</h2>
+  ${btRows ? `<div class="panel tw"><table><thead><tr><th>Period</th><th class="r">Trades</th><th class="r">Win rate</th><th class="r">Avg trade</th><th class="r">Avg win / loss</th><th class="r">Profit factor</th><th class="r">Max drawdown</th></tr></thead><tbody>${btRows}</tbody></table></div>
+  <p class="muted" style="max-width:75ch">Out-of-sample is the later 40% of the history (from ${esc(bt.split_date || "")}), which the model was not tuned on. Trust that row, not the in-sample one. Costs of 0.1% per side are included. Survivorship bias makes every backtest look better than live trading will${bt.buy_and_hold_avg_return_pct != null ? `; for comparison, buy-and-hold of the same stocks averaged ${pct(bt.buy_and_hold_avg_return_pct, 1)} over the whole period` : ""}.</p>` : `<div class="panel empty"><h3>No backtest yet</h3><p>Run <code>python -m app.backtest</code> once prices are loaded, and read the out-of-sample row before trusting any signal.</p></div>`}
+  <h2>Model versions</h2><div class="panel tw"><table><thead><tr><th>Version</th><th>Created</th><th class="r">Win rate</th><th class="r">Out-of-sample return</th><th>What changed</th></tr></thead><tbody>${vr}</tbody></table></div>
+  <h2>Learning log</h2>
+  <p class="muted" style="max-width:70ch;margin:0 0 10px">Each week the model tries small changes. It tunes on older data and is judged once on newer data it has not seen. Most attempts are rejected, which is intended.</p>
+  ${lg ? `<div class="panel tw"><table><thead><tr><th>Date</th><th>Change tried</th><th>Decision</th><th>Reason</th></tr></thead><tbody>${lg}</tbody></table></div>` : `<div class="panel pad muted">No learning cycle has run yet. The first one runs a week after the first update.</div>`}`;
+}
+
+async function viewHistory() {
+  const [data, h] = await Promise.all([api("/api/recommendations/history"), S.health]);
+  const rows = data.filter(x => S.filter === "ALL" || (x.outcome ? x.outcome.status : "OPEN") === S.filter);
+  const chips = [["ALL", "All"], ["WIN", "Wins"], ["LOSS", "Losses"], ["OPEN", "Open"]].map(([k, l]) => `<button class="chip" data-filter="${k}" aria-pressed="${S.filter === k}">${l}</button>`).join("");
+  const closed = data.filter(x => x.outcome && x.outcome.status !== "OPEN"), w = closed.filter(x => x.outcome.pnlPct > 0), l = closed.filter(x => x.outcome.pnlPct <= 0);
+  const avg = a => (a.length ? a.reduce((s, x) => s + x.outcome.pnlPct, 0) / a.length : 0);
+  const tr = rows.map(x => { const st = x.outcome ? x.outcome.status : "OPEN", pn = x.outcome ? x.outcome.pnlPct : null; return `<tr><td class="num">${esc(x.created.slice(0, 10))}</td><td><button class="sym" data-sym="${esc(x.symbol)}">${esc(x.symbol)}</button></td><td><span class="pill ${x.action === "BUY" ? "buy" : "sell"}">${x.action}</span></td><td class="r num">${fmt(x.entry)}</td><td><span class="pill ${st === "WIN" ? "buy" : st === "LOSS" ? "sell" : "open"}">${st}</span></td><td class="r num ${cls(pn || 0)}">${pn == null ? "–" : pct(pn)}</td></tr>`; }).join("");
+  return `<h1>Recommendation history</h1>
+  <p class="lead">Every recommendation is logged and graded against what the stock actually did, losses included. Results are after 0.2% round-trip costs. Open calls show their current profit or loss.</p>
+  ${h && h.demo ? `<p class="note"><b>Demo data.</b> Fictional stocks.</p>` : ""}
+  <div class="tiles"><div class="panel tile"><div class="k">Closed calls</div><div class="v">${closed.length}</div></div><div class="panel tile"><div class="k">Average win</div><div class="v pos">${pct(avg(w))}</div></div><div class="panel tile"><div class="k">Average loss</div><div class="v neg">${pct(avg(l))}</div></div><div class="panel tile"><div class="k">Hit rate</div><div class="v">${closed.length ? Math.round((w.length / closed.length) * 100) + "%" : "–"}</div></div></div>
+  <h2>Calls</h2><div class="chips" role="group" aria-label="Filter by result">${chips}</div>
+  ${tr ? `<div class="panel tw"><table><thead><tr><th>Date</th><th>Stock</th><th>Action</th><th class="r">Entry</th><th>Result</th><th class="r">Return</th></tr></thead><tbody>${tr}</tbody></table></div>` : `<div class="panel empty"><h3>Nothing to show</h3><p>${data.length ? "No calls match this filter." : "Recommendations are logged here from the first update on."}</p></div>`}`;
+}
+
+/* ---------- routing, drawing, events ---------- */
+const VIEWFN = { today: viewToday, stock: viewStock, portfolio: viewPortfolio, orders: viewOrders, performance: viewPerformance, history: viewHistory };
+function draw() {
+  if (S.view === "stock") drawStock();
+  if (S.view === "portfolio") drawPortfolio();
+  if (S.view === "performance" && $("#wr")) barChart($("#wr"), S.acc);
+}
+async function render() {
+  const my = ++S.seq, h = location.hash.replace("#", ""), keep = window.scrollY;
+  S.view = VIEWFN[h] ? h : "today";
+  $("#tabs").innerHTML = VIEWS.map(([k, l]) => `<button class="tab" role="tab" data-view="${k}" aria-selected="${S.view === k}">${l}</button>`).join("");
+  await loadHealth();
+  if (my !== S.seq) return;
+  if (!$("#view").firstChild) $("#view").innerHTML = '<p class="muted">Loading…</p>';
+  let html;
+  try { html = await VIEWFN[S.view](); }
+  catch (e) { html = `<div class="panel empty"><h3>Something went wrong</h3><p>${esc(e.message)}</p><p>If the server was just started, wait a moment and reload.</p></div>`; }
+  if (my !== S.seq) return;
+  $("#view").innerHTML = html; draw(); window.scrollTo(0, keep);
+}
+function go(v) { if (location.hash === "#" + v) render(); else location.hash = v; }
+
+document.addEventListener("click", async e => {
+  const t = e.target.closest("[data-view],[data-sym],[data-mkt],[data-filter],[data-copy],[data-ord]"); if (!t) return;
+  const d = t.dataset;
+  if (d.view) go(d.view);
+  else if (d.sym) { S.sym = d.sym; go("stock"); }
+  else if (d.mkt) { S.mkt = d.mkt; render(); }
+  else if (d.filter) { S.filter = d.filter; render(); }
+  else if (d.copy) {
+    const txt = ticket((S.recsById || {})[d.copy]);
+    (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(() => toast("Order details copied"), () => { t.outerHTML = `<span class="ticket">${esc(txt)}</span>`; toast("Select the text to copy it"); });
+  } else if (d.ord) {
+    const tok = $("#tokIn") ? $("#tokIn").value : S.token; S.token = tok; ss("stockbot-token", tok);
+    if (d.ord === "arm") { S.armed = +d.id; return render(); }
+    if (d.ord === "back") { S.armed = null; return render(); }
+    try {
+      if (d.ord === "send") { S.armed = null; const r = await post(`/api/tickets/${d.id}/approve`, tok); toast(r.message || "Order submitted"); }
+      else if (d.ord === "reject") { await post(`/api/tickets/${d.id}/reject`, tok); toast("Rejected"); }
+      else if (d.ord === "halt") { const r = await post(`/api/execution/${(await api("/api/execution/status")).halted ? "resume" : "halt"}`, tok); toast(r.halted ? "Kill switch on: no orders can be approved" : "Kill switch off"); }
+    } catch (err) { toast(err.message); }
+    render();
+  }
+});
+document.addEventListener("change", e => { if (e.target.id === "symIn" && S.tickers && S.tickers.some(t => t.symbol === e.target.value.trim())) { S.sym = e.target.value.trim(); render(); } });
+$("#updBtn").addEventListener("click", async () => { try { await post("/api/run-now"); toast("Update started. The first one downloads about two years of prices and can take several minutes."); } catch (e) { toast(e.message); } loadHealth(); });
+window.addEventListener("hashchange", render);
+let rt; window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(draw, 120); });
+setInterval(async () => { const was = !!(S.health && S.health.update && S.health.update.running); await loadHealth(); const now = !!(S.health && S.health.update && S.health.update.running); if (was && !now) { toast("Update finished"); render(); } }, 6000);
+render();
+</script>
+</body>
+</html>
